@@ -94,10 +94,10 @@ Fixing the re-apply below removes the noise too.
 
 ## Before submitting to the community registry
 
-- [ ] Set `packageRepo` in `startos/manifest/index.ts` to the repository this
-      actually lives in (currently points at `Start9-Community/kimai-startos`).
-- [ ] Confirm the CI workflows in `.github/workflows/` target the branch this
-      repo actually uses.
+- [x] `packageRepo` points at github.com/wksantiago/kimai-startos.
+- [x] CI workflows target `master`, which is this repo's default branch.
+- [ ] If this is ever transferred to Start9-Community, update `packageRepo`
+      again — the manifest URL is not derived from the git remote.
 - [ ] Have the translations in `startos/i18n/dictionaries/translations.ts`,
       `startos/manifest/i18n.ts`, and `startos/versions/current.ts` reviewed by
       a speaker of each language.
