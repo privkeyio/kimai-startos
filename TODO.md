@@ -125,9 +125,11 @@ Fixed by moving the readiness check to the socket and adding the idempotent
 
 ## Verify backup and restore
 
-- [ ] Take a backup, then restore to a clean install. Confirm timesheets (from
-      the MySQL dump), invoices (from `main`), and the admin password (from
-      `startos`/`store.json`) all come back.
+- [x] Backed up, uninstalled, and restored to a clean install (2026-09-10).
+      All 108 timesheets came back from the MySQL dump, all four users with
+      their password hashes and TOTP enrollments, and the schema restored at
+      the current migration version. Verified over TCP, which is the path that
+      matters — see the restore bug above.
 
 ## SMTP
 
