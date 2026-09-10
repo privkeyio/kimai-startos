@@ -34,10 +34,18 @@ Verified on the first install (2026-09-09), from the service log:
       `totp_secret` is not derived from `APP_SECRET` and survives a move between
       instances. Timesheets, customers, and projects all verified present.
 
-Still to confirm:
+- [x] The reactive rotation loop works. Running **Set Admin Password** wrote
+      store.json, which fired `.const() triggered` -> `Restarting service...`,
+      and the oneshot re-applied the new credential on the way back up. The
+      whole path is automatic; the user does not restart anything by hand.
+- [x] Imported data verified through the UI: timesheets, calendar, reporting,
+      export, customers, projects, activities, teams and the doctor page all
+      render without error, and a 2FA-enabled imported user logged in twice.
 
-- [ ] Sign in with a rotated password (the apply succeeded; the resulting
-      credential has not been used to log in yet).
+- [x] Signed in as `admin` with a rotated password. Both branches of the
+      credential design are now exercised against a running service: first-set
+      via `kimai:user:create` on a fresh install, and rotation via
+      `kimai:user:password` on an account this package did not create.
       Only the `kimai:user:create` branch has executed so far; the
       `kimai:user:password` fallback runs only once the account already exists,
       so it remains untested.
@@ -77,6 +85,34 @@ Fixing the re-apply below removes the noise too.
       write back to `store.json`, so the "last applied" marker needs somewhere
       else to live — a file on the `main` volume that both the oneshot and
       `setupMain` can see is the most likely shape.
+
+## Restore bug found and fixed (2026-09-09)
+
+Testing an actual uninstall-and-restore surfaced a defect that would have hit
+every user of this package, in the worst possible way: the restore reported
+success, the data was fully intact, and the service was nevertheless
+permanently stuck, with the real error visible only by attaching to the
+container.
+
+`withMysqlDump`'s restore builds the datadir and loads the dump itself, so the
+image entrypoint skips user setup and never creates `root@%`. The restored
+datadir has only `root@localhost` (socket-only), while Kimai connects over TCP
+to 127.0.0.1 — hence `ERROR 1130 (HY000): Host '127.0.0.1' is not allowed to
+connect to this MySQL server`. The `mysql` readiness check was also TCP, so it
+could never pass, and `kimai` never launched.
+
+Fixed by moving the readiness check to the socket and adding the idempotent
+`ensure-db-access` oneshot between the database and Kimai. See README —
+"The restored datadir has a different account layout".
+
+- [ ] Re-run the uninstall-and-restore test against a build that includes the
+      fix, and confirm it comes up unattended with no manual `CREATE USER`.
+      The fix is verified only in the sense that the same SQL, applied by hand,
+      recovered the stuck install; the oneshot itself has never executed.
+- [ ] Report the asymmetry to Start9. `withMysqlDump` restores a datadir whose
+      account layout differs from what the official mysql image produces on a
+      fresh init, which every package using it will hit. Worth a PR against
+      start-technologies rather than each package working around it.
 
 ## Verify backup and restore
 

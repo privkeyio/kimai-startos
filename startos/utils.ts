@@ -13,6 +13,15 @@ export const uiPort = 8001
 export const MYSQL_DATADIR = '/var/lib/mysql' as const
 
 /**
+ * MySQL's unix socket inside the `mysql` image.
+ *
+ * Load-bearing on a restored datadir: `root@localhost` is the only account
+ * that exists at that point, and it is reachable over the socket but not over
+ * TCP. See the `ensure-db-access` oneshot in main.ts.
+ */
+export const MYSQL_SOCKET = '/var/run/mysqld/mysqld.sock' as const
+
+/**
  * Kimai's writable state directory. The upstream image declares this as a
  * VOLUME, and it holds far more than the `data` + `plugins` pair the upstream
  * compose file mounts: invoices, exports, invoice/export templates, and the

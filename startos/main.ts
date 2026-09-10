@@ -11,6 +11,7 @@ import {
   KIMAI_APP_DIR,
   KIMAI_VAR_DIR,
   MYSQL_DATADIR,
+  MYSQL_SOCKET,
   TRUSTED_PROXIES,
   uiPort,
 } from './utils'
@@ -106,10 +107,13 @@ export const main = sdk.setupMain(async ({ effects }) => {
         ready: {
           display: i18n('Database'),
           fn: async () => {
+            // Deliberately over the socket rather than TCP. On a datadir that
+            // came from a restore, `root@localhost` is the only account that
+            // exists, and it is reachable over the socket alone — a TCP check
+            // here would never pass, and would strand the whole service.
             const { exitCode } = await mysqlSub.exec([
               'mysql',
-              '-h',
-              '127.0.0.1',
+              `--socket=${MYSQL_SOCKET}`,
               '-u',
               DB_USER,
               `-p${dbPassword}`,
@@ -129,6 +133,40 @@ export const main = sdk.setupMain(async ({ effects }) => {
           },
         },
         requires: [],
+      })
+      /**
+       * Guarantees an account Kimai can actually reach the database with.
+       *
+       * A fresh install gets `root@%` from the image's entrypoint, which
+       * honours MYSQL_ROOT_HOST (default `%`) when it initialises the datadir.
+       * A **restored** install never goes through that path: the SDK's
+       * `withMysqlDump` builds the datadir itself and loads the dump into it,
+       * so the entrypoint finds a populated datadir and skips user setup
+       * entirely. The result is a datadir whose only account is
+       * `root@localhost` — socket-only — while Kimai connects over TCP to
+       * 127.0.0.1. Restores therefore came up with the data fully intact and
+       * the service permanently stuck on `ERROR 1130 (HY000): Host
+       * '127.0.0.1' is not allowed to connect to this MySQL server`.
+       *
+       * Idempotent: a no-op on a fresh install, a repair on a restored one.
+       */
+      .addOneshot('ensure-db-access', {
+        subcontainer: mysqlSub,
+        exec: {
+          command: [
+            'sh',
+            '-c',
+            // Password reaches mysql through MYSQL_PWD and the SQL through an
+            // environment variable, so it never appears in the command line.
+            'export MYSQL_PWD="$MYSQL_ROOT_PASSWORD"; ' +
+              `mysql --socket=${MYSQL_SOCKET} -u ${DB_USER} -e ` +
+              '"CREATE USER IF NOT EXISTS \\"root\\"@\\"%\\" IDENTIFIED BY \\"$MYSQL_ROOT_PASSWORD\\"; ' +
+              'GRANT ALL PRIVILEGES ON *.* TO \\"root\\"@\\"%\\" WITH GRANT OPTION; ' +
+              'FLUSH PRIVILEGES;"',
+          ],
+          env: { MYSQL_ROOT_PASSWORD: dbPassword },
+        },
+        requires: ['mysql'],
       })
       .addDaemon('kimai', {
         subcontainer: kimaiSub,
@@ -150,7 +188,10 @@ export const main = sdk.setupMain(async ({ effects }) => {
               ),
             }),
         },
-        requires: ['mysql'],
+        // Gated on the grant, not just on mysqld being up: Kimai connects over
+        // TCP, which a restored datadir does not permit until ensure-db-access
+        // has run.
+        requires: ['mysql', 'ensure-db-access'],
       })
       /**
        * Applies the stored admin password to Kimai itself.

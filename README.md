@@ -119,11 +119,26 @@ Also included:
 
 The `mysql` volume itself is not copied; it is rebuilt from the dump on restore.
 
+### The restored datadir has a different account layout
+
+A restore does not produce the same MySQL state as a fresh install, and the difference is load-bearing.
+
+On a fresh install the image's entrypoint initializes the datadir and creates **`root@%`**, honouring `MYSQL_ROOT_HOST` (default `%`). On a restore, `sdk.Backups.withMysqlDump` builds the datadir itself and loads the dump into it, so the entrypoint finds a populated datadir and skips user setup entirely. The only account that exists is **`root@localhost`**, which is reachable over the unix socket but *not* over TCP.
+
+Kimai connects over TCP to `127.0.0.1`. Left alone, a restore therefore comes up with the data fully intact and the service permanently stuck, failing with `ERROR 1130 (HY000): Host '127.0.0.1' is not allowed to connect to this MySQL server` — visible only by attaching to the container.
+
+Two things in `main.ts` handle this:
+
+1. The `mysql` daemon's readiness check connects over the **socket**. A TCP check could never pass on a restored datadir, and since `kimai` is gated on that check, the whole service would hang.
+2. The **`ensure-db-access`** oneshot runs after the database is ready and before Kimai starts, creating `root@%` if it is missing. It is a no-op on a fresh install and a repair on a restored one, and the `kimai` daemon lists it in `requires`.
+
+This was found by testing an actual restore; it is not theoretical. The underlying asymmetry arguably belongs in the SDK, but the package cannot depend on that.
+
 ## Health Checks
 
 | Check | Displayed as | Behavior |
 | --- | --- | --- |
-| `mysql` daemon | Database | Runs `SELECT 1` over `127.0.0.1`. Reports `loading` while initializing, distinguishing a brand-new datadir from a restart. |
+| `mysql` daemon | Database | Runs `SELECT 1` over the **unix socket**, not TCP — see [Backups and Restore](#backups-and-restore) for why. Reports `loading` while initializing, distinguishing a brand-new datadir from a restart. |
 | `kimai` daemon | Web Interface | `checkPortListening` on the UI port, with a 5-minute grace period. Apache only binds after migrations finish, so a shorter grace period would flash red during legitimate work. |
 | `email` | Email | Reports `disabled` with a pointer to the Configure SMTP action when no mailer is set, `success` otherwise. |
 
