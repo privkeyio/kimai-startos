@@ -105,10 +105,19 @@ Fixed by moving the readiness check to the socket and adding the idempotent
 `ensure-db-access` oneshot between the database and Kimai. See README —
 "The restored datadir has a different account layout".
 
-- [ ] Re-run the uninstall-and-restore test against a build that includes the
-      fix, and confirm it comes up unattended with no manual `CREATE USER`.
-      The fix is verified only in the sense that the same SQL, applied by hand,
-      recovered the stuck install; the oneshot itself has never executed.
+- [x] Re-ran the uninstall-and-restore test against 2.66.0:1 (2026-09-10). The
+      service came up unattended with no manual intervention. The two runs
+      distinguish themselves cleanly: updating over an existing install logged
+      `[Warning] ... CREATE USER IF NOT EXISTS but they already exist:
+      'root'@'%'` and did nothing, while the restore logged no warning at all —
+      it created the account, because a restored datadir genuinely lacks it.
+      `dbtest.php` then connected over TCP to 127.0.0.1 (the call that failed
+      before the fix) and `kimai:install` reported `Already at the latest
+      version`.
+
+      Note for future testing: a restore reinstalls the package version stored
+      in the backup, so testing a fix requires a backup taken *after* that fix
+      is installed. Restoring an older backup replays the older code.
 - [ ] Report the asymmetry to Start9. `withMysqlDump` restores a datadir whose
       account layout differs from what the official mysql image produces on a
       fresh init, which every package using it will hit. Worth a PR against

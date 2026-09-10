@@ -132,7 +132,10 @@ Two things in `main.ts` handle this:
 1. The `mysql` daemon's readiness check connects over the **socket**. A TCP check could never pass on a restored datadir, and since `kimai` is gated on that check, the whole service would hang.
 2. The **`ensure-db-access`** oneshot runs after the database is ready and before Kimai starts, creating `root@%` if it is missing. It is a no-op on a fresh install and a repair on a restored one, and the `kimai` daemon lists it in `requires`.
 
-This was found by testing an actual restore; it is not theoretical. The underlying asymmetry arguably belongs in the SDK, but the package cannot depend on that.
+This was found by testing an actual restore, and the fix was verified by a second one; neither is theoretical. The underlying asymmetry arguably belongs in the SDK, but the package cannot depend on that.
+
+> [!IMPORTANT]
+> A restore reinstalls the package version recorded in the backup, not the version currently installed. Testing any packaging fix through a restore therefore requires a backup taken *after* that fix is installed — restoring an older backup replays the older code and reproduces the old behaviour.
 
 ## Health Checks
 
