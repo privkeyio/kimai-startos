@@ -176,12 +176,33 @@ Fixed by moving the readiness check to the socket and adding the idempotent
       transferred from the personal account to the privkeyio org on 2026-09-11;
       the manifest URL is not derived from the git remote, so it was updated by
       hand at the same time.
-- [ ] **Make the repo public before submitting.** Start9's process is to email
-      a link to a *public* repo, which they then fork into Start9-Community for
-      review. It is still private.
+- [x] Repo made public on 2026-09-11. Start9's process is to email a link to a
+      *public* repo, which they then fork into Start9-Community for review.
 - [x] CI workflows target `master`, which is this repo's default branch.
 - [ ] If this is ever transferred to Start9-Community, update `packageRepo`
       again — the manifest URL is not derived from the git remote.
 - [ ] Have the translations in `startos/i18n/dictionaries/translations.ts`,
       `startos/manifest/i18n.ts`, and `startos/versions/current.ts` reviewed by
-      a speaker of each language.
+      a speaker of each language. Disclosed as unreviewed in the submission,
+      with an offer to cut back to English-only if Start9 prefers.
+
+## Submitted 2026-09-11
+
+Emailed submissions@start9.com with a link to github.com/privkeyio/kimai-startos
+at version 2.66.0:2. The mail listed what was verified on hardware, described
+the full `/opt/kimai/var` mount and the `withMysqlDump` account-layout
+workaround, and disclosed three gaps up front: SMTP unexercised against a real
+provider, translations unreviewed, and aarch64 declared but never built.
+
+What happens next, per docs.start9.com/packaging/0.4.0.x/publishing.html:
+
+1. Start9 forks this repo into the Start9-Community org and reviews it for
+   correctness, conformance, documentation, localization and CI.
+2. **That fork becomes the upstream.** This repo stops being the source of
+   truth; future versions go in as PRs against the fork.
+3. Merging to `master` there builds and publishes to community-beta
+   automatically. Promotion to the production community registry is a separate
+   request by email or issue.
+
+- [ ] On hearing back: update `packageRepo` to the Start9-Community URL in the
+      first post-fork PR, and repoint the local git remote.
