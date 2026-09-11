@@ -49,13 +49,27 @@ Verified on the first install (2026-09-09), from the service log:
       Only the `kimai:user:create` branch has executed so far; the
       `kimai:user:password` fallback runs only once the account already exists,
       so it remains untested.
-- [ ] Confirm no mixed-content or redirect-loop errors in the browser console,
-      which is what a wrong `TRUSTED_PROXIES` would look like. Check that
-      Kimai's own links come back as `https://`.
-- [ ] Record a timesheet entry, restart the service, confirm it survived.
-- [ ] Generate an invoice, then restart and confirm it is still listed — this is
-      what the full `/opt/kimai/var` mount is for, and the narrower upstream
-      mount would fail it.
+- [x] Confirmed clean in the browser console (2026-09-11, Chrome DevTools on
+      `/en/dashboard/`). No mixed-content warnings, no redirect loop, and the
+      Issues panel reports "No issues" — which is where Chrome surfaces mixed
+      content, so an empty panel on a fully-rendered page is the positive
+      signal. All subresources loaded (CSS, icon fonts, chart), which a blocked
+      insecure request would have broken.
+
+      The only console output is two `Permissions-Policy: Unrecognized feature`
+      warnings for `attribution-reporting` and `browsing-topics`. Those come
+      from the StartOS reverse proxy, not from this package or the image —
+      nothing in `.docker/`, Kimai's config, or `startos/` sets that header.
+      They appear on any StartOS-hosted service and are not actionable here.
+- [x] Recorded a timesheet entry, restarted, and confirmed it survived
+      (2026-09-11). Still listed under My times after the restart.
+- [x] Generated an invoice, restarted, and **downloaded the rendered file**
+      (2026-09-11) — a valid 29,845-byte, single-page PDF 1.4, not a stub or an
+      error page. This is the check that justifies mounting all of
+      `/opt/kimai/var`: the invoice row lives in MySQL and would have survived
+      either way, but the rendered file lives in `/opt/kimai/var/invoices`,
+      which upstream's narrower `var/data` + `var/plugins` mount does not
+      cover. Listing the row proves nothing; fetching the file does.
 
 ## Admin password re-apply fixed (2026-09-11)
 
