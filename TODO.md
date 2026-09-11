@@ -172,7 +172,13 @@ Fixed by moving the readiness check to the socket and adding the idempotent
 
 ## Before submitting to the community registry
 
-- [x] `packageRepo` points at github.com/wksantiago/kimai-startos.
+- [x] `packageRepo` points at github.com/privkeyio/kimai-startos. The repo was
+      transferred from the personal account to the privkeyio org on 2026-09-11;
+      the manifest URL is not derived from the git remote, so it was updated by
+      hand at the same time.
+- [ ] **Make the repo public before submitting.** Start9's process is to email
+      a link to a *public* repo, which they then fork into Start9-Community for
+      review. It is still private.
 - [x] CI workflows target `master`, which is this repo's default branch.
 - [ ] If this is ever transferred to Start9-Community, update `packageRepo`
       again — the manifest URL is not derived from the git remote.

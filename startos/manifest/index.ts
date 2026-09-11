@@ -5,7 +5,7 @@ export const manifest = setupManifest({
   id: 'kimai',
   title: 'Kimai',
   license: 'AGPL-3.0-or-later',
-  packageRepo: 'https://github.com/wksantiago/kimai-startos',
+  packageRepo: 'https://github.com/privkeyio/kimai-startos',
   upstreamRepo: 'https://github.com/kimai/kimai',
   marketingUrl: 'https://www.kimai.org/',
   donationUrl: 'https://www.kimai.org/support.html',
