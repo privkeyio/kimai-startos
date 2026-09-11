@@ -33,6 +33,20 @@ export const KIMAI_VAR_DIR = '/opt/kimai/var' as const
 /** Kimai's application root inside the image — the cwd for `bin/console`. */
 export const KIMAI_APP_DIR = '/opt/kimai' as const
 
+/**
+ * Records which admin credentials the `apply-admin-credentials` oneshot last
+ * pushed into Kimai, as a hash rather than the password itself.
+ *
+ * Lives on the `main` volume so it is backed up and restored together with
+ * store.json, keeping the two in agreement: a restore that brings back a
+ * password also brings back the marker saying it was already applied.
+ *
+ * Under `var/data` because the image chowns all of `/opt/kimai/var` to the web
+ * user on every start, so the oneshot (which runs as `www-data`) can write here.
+ */
+export const ADMIN_CREDENTIALS_MARKER =
+  `${KIMAI_VAR_DIR}/data/.startos-admin-applied` as const
+
 /** Database name created by the mysql image's entrypoint on first start. */
 export const DB_NAME = 'kimai' as const
 

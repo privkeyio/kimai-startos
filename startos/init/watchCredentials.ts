@@ -10,7 +10,9 @@ import { sdk } from '../sdk'
  * on every container rebuild does not spam the user.
  */
 export const watchCredentials = sdk.setupOnInit(async (effects) => {
-  const adminPassword = await storeJson.read((s) => s.adminPassword).const(effects)
+  const adminPassword = await storeJson
+    .read((s) => s.adminPassword)
+    .const(effects)
 
   if (!adminPassword) {
     await sdk.action.createOwnTask(effects, setAdminPassword, 'critical', {

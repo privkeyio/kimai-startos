@@ -57,34 +57,47 @@ Verified on the first install (2026-09-09), from the service log:
       what the full `/opt/kimai/var` mount is for, and the narrower upstream
       mount would fail it.
 
-## Design flaw: the oneshot rewrites an existing admin password on every start
+## Admin password re-apply fixed (2026-09-11)
 
-`apply-admin-credentials` runs `kimai:user:create admin ...`, falling back to
-`kimai:user:password admin ...`, on **every** service start. That is correct for
-a fresh install, but wrong whenever the database already contains an `admin`
+`apply-admin-credentials` ran `kimai:user:create admin ...`, falling back to
+`kimai:user:password admin ...`, on **every** service start. That was correct for
+a fresh install, but wrong whenever the database already contained an `admin`
 user that this package did not create — after importing another instance's data,
 or after a restore from a backup taken elsewhere. In those cases the package
-silently resets that account's password on the next restart.
+silently reset that account's password on the next restart.
 
 Surfaced 2026-09-09 while migrating live data from another Kimai instance whose
 database contained its own `admin`.
 
-The fix is not simply "create only if missing": that would break the rotation
-path, since `kimai:user:password` is what makes re-running **Set Admin Password**
-work. It also can't move wholesale into the action, because the action is
-reachable from a critical task on a fresh install, and a critical task suppresses
-the Start control — an action gated on `only-running` would deadlock.
+Fixed by making the oneshot conditional rather than unconditional. It hashes
+`user:email:password`, compares against `var/data/.startos-admin-applied` on the
+`main` volume, and exits early when they match. Rotation still works, because a
+new password is a new hash. The marker is backed up with the volume, so it stays
+in agreement with the `store.json` that holds the password. A marker that cannot
+be written logs a warning and succeeds anyway, degrading to the old
+re-apply-every-start behaviour rather than failing a start.
 
-A cosmetic consequence of the same design: on every start where `admin` already
-exists, the logs show two `[ERROR]` lines from the failed `kimai:user:create`
-before the successful fallback. Nothing is wrong, but it reads like a failure.
-Fixing the re-apply below removes the noise too.
+- [x] Apply the password only when it has actually changed, rather than on every
+      start.
+- [x] The `[ERROR]` noise goes away with it: the failing `kimai:user:create` now
+      runs only on a genuine rotation, not on every start.
+- [x] Verified on the box against the live install, which carries an imported
+      `admin` this package did not create (2026-09-11). Three starts of
+      `2.66.0:2`, from the service log:
 
-- [ ] Apply the password only when it has actually changed, rather than on every
-      start. The obstacle is that the oneshot runs inside a container and cannot
-      write back to `store.json`, so the "last applied" marker needs somewhere
-      else to live — a file on the `main` volume that both the oneshot and
-      `setupMain` can see is the most likely shape.
+      | Start | Credentials | apply-admin-credentials |
+      | --- | --- | --- |
+      | 11:50, first after the upgrade | unchanged, no marker yet | applied once |
+      | 11:52, plain restart | unchanged, marker matches | logged nothing |
+      | 11:54, after Set Admin Password | changed | applied |
+
+      The 11:52 start is the fix: the imported account was left alone, and the
+      two `[ERROR]` lines are gone with it. The 11:54 start confirms rotation
+      still works — `.const() triggered` -> `Restarting service...` ->
+      `Changed password for user "admin"`. No marker-write warning appeared on
+      any start, so `var/data` is writable by the oneshot as expected.
+- [ ] Confirm by hand that the rotated password actually signs in, and that a
+      further restart after the rotation is silent again.
 
 ## Restore bug found and fixed (2026-09-09)
 

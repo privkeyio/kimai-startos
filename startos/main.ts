@@ -3,6 +3,7 @@ import { storeJson } from './fileModels/store.json'
 import { i18n } from './i18n'
 import { sdk } from './sdk'
 import {
+  ADMIN_CREDENTIALS_MARKER,
   ADMIN_EMAIL,
   ADMIN_USERNAME,
   DB_NAME,
@@ -199,8 +200,17 @@ export const main = sdk.setupMain(async ({ effects }) => {
        * This is a oneshot rather than the image's own ADMINPASS/ADMINMAIL
        * variables because those only reach `kimai:user:create`, which fails
        * once the user exists — so they can set a password but never rotate
-       * one. Creating-then-falling-back-to-setting covers both, and re-running
-       * it on every start is harmless.
+       * one. Creating-then-falling-back-to-setting covers both.
+       *
+       * It only acts when the credentials have actually changed since the last
+       * successful apply, which is what the hash in ADMIN_CREDENTIALS_MARKER
+       * records. Re-applying on every start is not harmless: whenever the
+       * database already holds an `admin` this package did not create — after
+       * importing another instance's data, or restoring a backup taken
+       * elsewhere — an unconditional apply silently resets that account's
+       * password on the next restart. Skipping the no-op case also removes the
+       * two `[ERROR]` lines the failing `kimai:user:create` logged on every
+       * start where the account already existed.
        *
        * It requires the `kimai` daemon rather than `mysql` because the console
        * needs Kimai's schema to exist, and it is `kimai:install` — inside the
@@ -214,10 +224,23 @@ export const main = sdk.setupMain(async ({ effects }) => {
             '-c',
             // The password is passed through the environment, not interpolated
             // into this string, so it is never split by the shell or logged as
-            // part of the command line.
-            '[ -n "$KIMAI_ADMIN_PASSWORD" ] || exit 0; ' +
-              'bin/console -n kimai:user:create "$KIMAI_ADMIN_USER" "$KIMAI_ADMIN_EMAIL" ROLE_SUPER_ADMIN "$KIMAI_ADMIN_PASSWORD" || ' +
-              'bin/console -n kimai:user:password "$KIMAI_ADMIN_USER" "$KIMAI_ADMIN_PASSWORD"',
+            // part of the command line. The marker stores a hash of the
+            // credentials for the same reason — the file is on a backed-up
+            // volume, and it has no need to hold the secret itself.
+            [
+              '[ -n "$KIMAI_ADMIN_PASSWORD" ] || exit 0',
+              `marker=${ADMIN_CREDENTIALS_MARKER}`,
+              'want=$(printf %s "$KIMAI_ADMIN_USER:$KIMAI_ADMIN_EMAIL:$KIMAI_ADMIN_PASSWORD" | sha256sum | cut -d" " -f1)',
+              '[ "$(cat "$marker" 2>/dev/null)" = "$want" ] && exit 0',
+              'bin/console -n kimai:user:create "$KIMAI_ADMIN_USER" "$KIMAI_ADMIN_EMAIL" ROLE_SUPER_ADMIN "$KIMAI_ADMIN_PASSWORD" ||' +
+                ' bin/console -n kimai:user:password "$KIMAI_ADMIN_USER" "$KIMAI_ADMIN_PASSWORD" ||' +
+                ' exit 1',
+              // A marker that cannot be written is not worth failing a start
+              // over: the credentials are already applied, and the only
+              // consequence is that the next start repeats the work.
+              'mkdir -p "$(dirname "$marker")" && (umask 077 && printf %s "$want" > "$marker") ||' +
+                ' echo "Warning: could not record the credential marker; the admin password will be re-applied on the next start"',
+            ].join('\n'),
           ],
           cwd: KIMAI_APP_DIR,
           // Match the user Apache runs as, so any cache file the console

@@ -49,7 +49,7 @@ Kimai's entrypoint waits for the database, runs `kimai:install` (schema creation
 
 | Volume | Mount point | Contents |
 | --- | --- | --- |
-| `main` | `/opt/kimai/var` | Invoices, exports, invoice/export templates, plugins, the generated app secret, logs |
+| `main` | `/opt/kimai/var` | Invoices, exports, invoice/export templates, plugins, the generated app secret, the admin-credentials marker, logs |
 | `mysql` | `/var/lib/mysql` | MySQL data directory |
 | `startos` | — | `store.json`: generated secrets and SMTP settings |
 
@@ -62,9 +62,15 @@ Both subcontainers share a network namespace, so Kimai reaches MySQL over `127.0
 1. On install, the package generates a MySQL root password and Symfony `APP_SECRET` into `store.json`.
 2. A **critical task** is raised pointing at the **Set Admin Password** action. Kimai ships with no accounts, so this must be run before anyone can sign in.
 3. On first start, MySQL initializes its data directory and Kimai's entrypoint builds the schema. This is the slow part — several minutes is normal.
-4. Once Kimai is healthy, an `apply-admin-credentials` oneshot runs `kimai:user:create`, falling back to `kimai:user:password`, to provision or update the `admin` super-admin.
+4. Once Kimai is healthy, an `apply-admin-credentials` oneshot runs `kimai:user:create`, falling back to `kimai:user:password`, to provision or update the `admin` super-admin. It runs only when the credentials have changed since the last successful apply.
 
-Upstream's `ADMINPASS`/`ADMINMAIL` variables are deliberately **not** used. They only feed `kimai:user:create`, which fails once the account exists — enough to set a password, never to rotate one. The oneshot covers both cases with a single code path, and re-runs harmlessly on every start.
+Upstream's `ADMINPASS`/`ADMINMAIL` variables are deliberately **not** used. They only feed `kimai:user:create`, which fails once the account exists — enough to set a password, never to rotate one. The oneshot covers both cases with a single code path.
+
+The oneshot is guarded rather than unconditional. It hashes the credentials it is about to apply and records that hash in `var/data/.startos-admin-applied`; on a later start where the hash still matches, it exits without touching Kimai. Applying on every start would be destructive whenever the database already holds an `admin` this package did not create — after importing another instance's data, or restoring a backup taken elsewhere — because it would silently reset that account's password on the next restart. The marker lives on the `main` volume, so a backup and its restore carry it alongside the `store.json` that holds the password, and the two stay in agreement.
+
+If the `admin` account is ever deleted from inside Kimai, run **Set Admin Password** again: a new password produces a new hash, which makes the oneshot re-create the account on the next start.
+
+Installs upgrading from `2.66.0:1` or earlier have no marker yet, so the first start after the upgrade applies the stored password once more and writes the marker. Every start after that leaves the account alone. This is deliberate: seeding the marker from a version migration would mean writing a credential hash from a runtime this package cannot test against, and a migration that throws blocks the upgrade outright.
 
 The admin account is created with the non-routable address `admin@kimai.local`. Kimai requires an email-shaped value; nothing is ever sent to it. Change it inside Kimai if you want password-reset emails to reach you.
 
