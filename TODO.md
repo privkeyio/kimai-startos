@@ -96,8 +96,12 @@ re-apply-every-start behaviour rather than failing a start.
       still works — `.const() triggered` -> `Restarting service...` ->
       `Changed password for user "admin"`. No marker-write warning appeared on
       any start, so `var/data` is writable by the oneshot as expected.
-- [ ] Confirm by hand that the rotated password actually signs in, and that a
-      further restart after the rotation is silent again.
+- [x] Signed in with the rotated password (2026-09-11). The full rotation path
+      is now exercised end to end on a live install: action -> store.json ->
+      restart -> `kimai:user:password` -> working login.
+- [ ] Restart once more after a rotation and confirm the oneshot is silent
+      again. Low risk — the same marker-match path already logged nothing on
+      the 11:52 restart — but it closes the matrix.
 
 ## Restore bug found and fixed (2026-09-09)
 
